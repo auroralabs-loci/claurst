@@ -1,0 +1,73 @@
+name: LOCI Analysis
+on:
+  push:
+    branches:
+      - loci/main-*
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  loci:
+    if: vars.UPSTREAM_REPO != ''
+    runs-on: ubuntu-latest
+
+    env:
+      # @configure: Set your loci project name or keep it empty if project name is derived from repo name
+      LOCI_PROJECT: ''
+      LOCI_API_KEY: '${{ secrets.LOCI_API_KEY }}'
+      LOCI_BACKEND_URL: '${{ vars.LOCI_BACKEND_URL }}'
+      GH_TOKEN: ${{ secrets.MIRROR_REPOS_WRITE_PAT }}
+
+    environment: ${{ vars.LOCI_ENV || 'PROD__AL_DEMO' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}
+
+      - name: Compute target
+        id: target
+        if: github.event_name == 'push'
+        run: |
+          branch="${{ github.ref_name }}"
+          sha="${branch#loci/main-}"
+          echo "value=main@${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute base
+        id: base
+        if: github.event_name == 'pull_request'
+        run: |
+          git remote add upstream "https://github.com/${{ vars.UPSTREAM_REPO }}.git" 2>/dev/null || true   
+          git fetch upstream                                                                               
+          upstream_default=$(gh api "repos/${{ vars.UPSTREAM_REPO }}" --jq .default_branch)                
+          merge_base=$(git merge-base HEAD "upstream/${upstream_default}")                                 
+          short_sha="${merge_base:0:7}"                                                                    
+          echo "value=main@${short_sha}" >> "$GITHUB_OUTPUT"                                               
+
+      # @configure: Install build dependencies for your project
+      - name: Install dependencies
+        run: |
+          echo "TODO: Install your build dependencies here"
+          echo "Example: sudo apt-get install -y build-essential cmake"
+        shell: bash -euo pipefail {0}
+
+      # @configure: Build your project binaries
+      - name: Build
+        run: |
+          echo "TODO: Build your project here"
+          echo "Example: cmake -B build && cmake --build build"
+        shell: bash -euo pipefail {0}
+
+      - name: Upload
+        uses: auroralabs-loci/loci-action@v1
+        with:
+          mode: upload
+          # @configure: List your binary paths/directories/globs 
+          binaries: |
+                path/to/binary1
+                path/to/binary2
+          project: '${{ env.LOCI_PROJECT }}'
+          target: ${{ steps.target.outputs.value || ''}}
+          base: ${{ steps.base.outputs.value || '' }}

@@ -1,0 +1,26 @@
+name: Template Setup
+on:
+  push:
+    branches: [overlay]
+
+jobs:
+  setup:
+    # Only run on first workflow execution (fresh repo from template)
+    if: (github.run_number == 1) && (github.repository != 'auroralabs-loci/mirror-template')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remove template files and this workflow
+        run: |
+          rm -f README.md
+          rm -f .github/workflows/sync-overlay.yml
+          rm -f .github/workflows/template-setup.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Initialize from template" || echo "Nothing to commit"
+          git push
