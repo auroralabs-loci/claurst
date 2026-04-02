@@ -9,11 +9,10 @@ on:
 jobs:
   loci:
     if: vars.UPSTREAM_REPO != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     env:
-      # @configure: Set your loci project name or keep it empty if project name is derived from repo name
-      LOCI_PROJECT: ''
+      LOCI_PROJECT: 'claurst'
       LOCI_API_KEY: '${{ secrets.LOCI_API_KEY }}'
       LOCI_BACKEND_URL: '${{ vars.LOCI_BACKEND_URL }}'
       GH_TOKEN: ${{ secrets.MIRROR_REPOS_WRITE_PAT }}
@@ -39,35 +38,31 @@ jobs:
         id: base
         if: github.event_name == 'pull_request'
         run: |
-          git remote add upstream "https://github.com/${{ vars.UPSTREAM_REPO }}.git" 2>/dev/null || true   
-          git fetch upstream                                                                               
-          upstream_default=$(gh api "repos/${{ vars.UPSTREAM_REPO }}" --jq .default_branch)                
-          merge_base=$(git merge-base HEAD "upstream/${upstream_default}")                                 
-          short_sha="${merge_base:0:7}"                                                                    
-          echo "value=main@${short_sha}" >> "$GITHUB_OUTPUT"                                               
+          git remote add upstream "https://github.com/${{ vars.UPSTREAM_REPO }}.git" 2>/dev/null || true
+          git fetch upstream
+          upstream_default=$(gh api "repos/${{ vars.UPSTREAM_REPO }}" --jq .default_branch)
+          merge_base=$(git merge-base HEAD "upstream/${upstream_default}")
+          short_sha="${merge_base:0:7}"
+          echo "value=main@${short_sha}" >> "$GITHUB_OUTPUT"
 
-      # @configure: Install build dependencies for your project
+      # Rust and libssl-dev are pre-installed on ubuntu-24.04-arm.
+      # rustup is used to ensure the stable toolchain is active.
       - name: Install dependencies
-        run: |
-          echo "TODO: Install your build dependencies here"
-          echo "Example: sudo apt-get install -y build-essential cmake"
+        run: rustup toolchain install stable --no-self-update
         shell: bash -euo pipefail {0}
 
-      # @configure: Build your project binaries
+      # Build debug binary (no optional features — computer-use and voice require
+      # X11/ALSA which are unavailable on headless CI runners).
       - name: Build
-        run: |
-          echo "TODO: Build your project here"
-          echo "Example: cmake -B build && cmake --build build"
+        run: cargo build --manifest-path src-rust/Cargo.toml
         shell: bash -euo pipefail {0}
 
       - name: Upload
         uses: auroralabs-loci/loci-action@v1
         with:
           mode: upload
-          # @configure: List your binary paths/directories/globs 
           binaries: |
-                path/to/binary1
-                path/to/binary2
+            src-rust/target/debug/claude
           project: '${{ env.LOCI_PROJECT }}'
           target: ${{ steps.target.outputs.value || ''}}
           base: ${{ steps.base.outputs.value || '' }}
