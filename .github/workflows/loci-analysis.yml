@@ -45,10 +45,13 @@ jobs:
           short_sha="${merge_base:0:7}"
           echo "value=main@${short_sha}" >> "$GITHUB_OUTPUT"
 
-      # Rust and libssl-dev are pre-installed on ubuntu-24.04-arm.
-      # rustup is used to ensure the stable toolchain is active.
+      # Rust, libssl-dev, pkg-config and build-essential are pre-installed on ubuntu-24.04-arm.
+      # libasound2-dev is required by alsa-sys, pulled in via cc-core's voice feature.
       - name: Install dependencies
-        run: rustup toolchain install stable --no-self-update
+        run: |
+          rustup toolchain install stable --no-self-update
+          sudo apt-get update -q
+          sudo apt-get install -y libasound2-dev
         shell: bash -euo pipefail {0}
 
       # Build debug binary (no optional features — computer-use and voice require
