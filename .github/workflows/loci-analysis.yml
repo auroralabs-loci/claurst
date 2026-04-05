@@ -1,0 +1,71 @@
+name: LOCI Analysis
+on:
+  push:
+    branches:
+      - loci/main-*
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  loci:
+    if: vars.UPSTREAM_REPO != ''
+    runs-on: ubuntu-24.04-arm
+
+    env:
+      LOCI_PROJECT: 'claurst'
+      LOCI_API_KEY: '${{ secrets.LOCI_API_KEY }}'
+      LOCI_BACKEND_URL: '${{ vars.LOCI_BACKEND_URL }}'
+      GH_TOKEN: ${{ secrets.MIRROR_REPOS_WRITE_PAT }}
+
+    environment: ${{ vars.LOCI_ENV || 'PROD__AL_DEMO' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}
+
+      - name: Compute target
+        id: target
+        if: github.event_name == 'push'
+        run: |
+          branch="${{ github.ref_name }}"
+          sha="${branch#loci/main-}"
+          echo "value=main@${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute base
+        id: base
+        if: github.event_name == 'pull_request'
+        run: |
+          git remote add upstream "https://github.com/${{ vars.UPSTREAM_REPO }}.git" 2>/dev/null || true
+          git fetch upstream
+          upstream_default=$(gh api "repos/${{ vars.UPSTREAM_REPO }}" --jq .default_branch)
+          merge_base=$(git merge-base HEAD "upstream/${upstream_default}")
+          short_sha="${merge_base:0:7}"
+          echo "value=main@${short_sha}" >> "$GITHUB_OUTPUT"
+
+      # Rust, libssl-dev, pkg-config and build-essential are pre-installed on ubuntu-24.04-arm.
+      # libasound2-dev is required by alsa-sys, pulled in via cc-core's voice feature.
+      - name: Install dependencies
+        run: |
+          rustup toolchain install stable --no-self-update
+          sudo apt-get update -q
+          sudo apt-get install -y libasound2-dev
+        shell: bash -euo pipefail {0}
+
+      # Build debug binary (no optional features — computer-use and voice require
+      # X11/ALSA which are unavailable on headless CI runners).
+      - name: Build
+        run: cargo build --manifest-path src-rust/Cargo.toml
+        shell: bash -euo pipefail {0}
+
+      - name: Upload
+        uses: auroralabs-loci/loci-action@v1
+        with:
+          mode: upload
+          binaries: |
+            src-rust/target/debug/claude
+          project: '${{ env.LOCI_PROJECT }}'
+          target: ${{ steps.target.outputs.value || ''}}
+          base: ${{ steps.base.outputs.value || '' }}
