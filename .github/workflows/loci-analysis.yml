@@ -65,7 +65,7 @@ jobs:
         with:
           mode: upload
           binaries: |
-            src-rust/target/debug/claude
+            src-rust/target/debug/claurst
           project: '${{ env.LOCI_PROJECT }}'
           target: ${{ steps.target.outputs.value || ''}}
           base: ${{ steps.base.outputs.value || '' }}
