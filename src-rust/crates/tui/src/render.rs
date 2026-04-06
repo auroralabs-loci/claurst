@@ -86,10 +86,9 @@ fn spinner_color(app: &App) -> Color {
 }
 
 /// Global monotonic animation tick, capped to a fixed cadence.
-/// 200ms step = 5 animation updates/second, independent of render FPS.
-fn animation_tick_200ms() -> u64 {
-    let start = Instant::now();
-    (start.elapsed().as_millis() / 200) as u64
+/// 100ms step = 10 animation updates/second, independent of render FPS.
+fn animation_tick_100ms(app: &App) -> u64 {
+    return (app.session_start.elapsed().as_millis() / 100) as u64;
 }
 
 fn is_modal_open(app: &App) -> bool {
@@ -1758,7 +1757,7 @@ fn render_status_row(frame: &mut Frame, app: &App, area: Rect) {
         )]
     } else if app.is_streaming {
         // Spinner glyph (turns red on stall)
-        let frame_count = animation_tick_200ms();
+        let frame_count = animation_tick_100ms(app);
         // Pick a label: use the status message if it has real content,
         // otherwise show a default "Thinking" shimmer so the user always
         // sees that the model is working.
